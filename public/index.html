@@ -1150,25 +1150,38 @@ body.dark a:hover {
         }
 
         function renderMemberDashboard() {
-            const clubsDiv = document.getElementById('memberClubs');
-            clubsDiv.innerHTML = '';
-            
-            if (currentUser.clubs && currentUser.clubs.length > 0) {
-                currentUser.clubs.forEach(clubId => {
-                    const club = database.clubs.find(c => c.id === clubId);
-                    if (club) {
-                        const div = document.createElement('div');
-                        div.className = 'club-item';
-                        div.innerHTML = `
-                            <strong>${club.name}</strong>
-                            <p style="font-size: 0.875rem; color: #9ca3af; margin-top: 0.25rem;">👥 ${club.members ? club.members.length : 0} members</p>
-                        `;
-                        clubsDiv.appendChild(div);
-                    }
-                });
-            } else {
-                clubsDiv.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🎭</div><p>You haven\'t joined any clubs yet</p></div>';
-            }
+           const clubsDiv = document.getElementById('memberClubs');
+clubsDiv.innerHTML = '';
+
+if (currentUser.clubs && currentUser.clubs.length > 0) {
+  const grid = document.createElement('div');
+  grid.className = 'grid grid-3';
+
+  currentUser.clubs.forEach(clubId => {
+    const club = database.clubs.find(c => c.id === clubId);
+    if (club) {
+      const card = document.createElement('div');
+      card.className = 'card club-card';
+      card.style.cursor = 'pointer';
+      card.onclick = () => openMemberClubModal(club);
+      card.innerHTML = `
+        <div style="display:flex; justify-content:center; align-items:center; height:180px; overflow:hidden; margin-bottom:1rem;">
+          <img src="${club.image}" alt="${club.name}" class="club-image" style="height:100%; width:auto; border-radius:0.75rem;">
+        </div>
+        <div>
+          <h3 style="font-size:1.25rem; font-weight:bold; text-align:center; margin-bottom:0.5rem;">${club.name}</h3>
+          <p style="text-align:center; color:#9ca3af;">👥 ${club.members?.length || 0} members</p>
+        </div>
+      `;
+      grid.appendChild(card);
+    }
+  });
+
+  clubsDiv.appendChild(grid);
+} else {
+  clubsDiv.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🎭</div><p>You haven\'t joined any clubs yet</p></div>';
+}
+
             
             const eventsDiv = document.getElementById('memberEvents');
             eventsDiv.innerHTML = '';
@@ -1328,72 +1341,104 @@ function openModalForClub(type) {
 }
 
 
-        function renderClubs() {
-            const grid = document.getElementById('clubsGrid');
-            grid.innerHTML = '';
-            
-            if (database.clubs.length === 0) {
-                grid.innerHTML = '<div class="empty-state" style="grid-column: 1 / -1;"><div class="empty-state-icon">🎭</div><p>No clubs available yet</p></div>';
-                return;
-            }
-            
-            database.clubs.forEach(club => {
-  const card = document.createElement('div');
-  card.className = 'card club-card';
-  card.onclick = () => openClubModal(club);
-  card.innerHTML = `
-    <img src="${club.image}" alt="${club.name}" class="club-image" 
-      style="border-radius: 0.75rem 0.75rem 0 0; margin: -1.5rem -1.5rem 1rem -1.5rem;">
+function renderClubs() {
+  const grid = document.getElementById('clubsGrid');
+  grid.innerHTML = '';
 
-    <div>
-      <h3 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 0.5rem;">
+  if (database.clubs.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-state" style="grid-column: 1 / -1;">
+        <div class="empty-state-icon">🎭</div>
+        <p>No clubs available yet</p>
+      </div>`;
+    return;
+  }
+
+  database.clubs.forEach(club => {
+    const card = document.createElement('div');
+    card.className = 'card club-card';
+    card.onclick = () => openClubModal(club);
+
+    card.innerHTML = `
+      <img src="${club.image}" alt="${club.name}" 
+           style="width:100%; height:180px; object-fit:cover; border-radius:0.75rem 0.75rem 0 0; margin-bottom:1rem;">
+      
+      <h3 style="font-size:1.25rem; font-weight:bold; text-align:center; margin-bottom:0.5rem;">
         ${club.name}
       </h3>
-      <p style="color: #9ca3af; margin-bottom: 1rem;">
-        ${club.description.substring(0, 120)}...
+      <p style="color:#9ca3af; text-align:center; margin-bottom:1rem;">
+        ${club.description.substring(0, 100)}...
       </p>
 
-      <div style="display: flex; align-items: center; gap: 1rem; font-size: 0.875rem;">
-        <span style="color: #9ca3af;">👥 ${club.members ? club.members.length : 0} members</span>
-        <span style="color: #9ca3af;">📅 ${club.events ? club.events.length : 0} events</span>
+      <div style="display:flex; justify-content:center; margin-bottom:1rem;">
+        ${
+          currentUser?.clubs?.includes(club.id)
+            ? `<button class="btn btn-danger" onclick="leaveClub(${club.id})">Leave Club</button>`
+            : `<button class="btn btn-primary" onclick="joinClub(${club.id})">Join Club</button>`
+        }
+      </div>
+
+      <div style="text-align:center; font-size:0.875rem; color:#9ca3af;">
+        👥 ${club.members?.length || 0} members • 📅 ${club.events?.length || 0} events
       </div>
 
       ${
         currentUser && currentUser.role === 'Admin'
-        ? `
-          <div style="margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
-            <div style="margin-bottom: 0.75rem;">
-              <strong>👤 Leader:</strong>
-              <span style="color:#9ca3af;">
-                ${club.leader && club.leader.name 
-                  ? club.leader.name 
-                  : '<em>No leader assigned</em>'}
-              </span>
-              ${
-                club.leader
-                  ? `<button onclick="removeClubLeader(${club.id})"
-                      class="btn btn-danger"
-                      style="padding:0.25rem 0.75rem; font-size:0.8rem; margin-left:0.5rem;">
-                      ❌ Remove
-                    </button>`
-                  : ''
-              }
-            </div>
+          ? `
+            <div style="margin-top:1rem; border-top:1px solid rgba(255,255,255,0.1); padding-top:1rem;">
+              <div style="margin-bottom:0.75rem;">
+                <strong>👤 Leader:</strong>
+                <span style="color:#9ca3af;">
+                  ${club.leader?.name || '<em>No leader assigned</em>'}
+                </span>
+                ${
+                  club.leader
+                    ? `<button onclick="removeClubLeader(${club.id})"
+                        class="btn btn-danger"
+                        style="padding:0.25rem 0.75rem; font-size:0.8rem; margin-left:0.5rem;">
+                        ❌ Remove
+                      </button>`
+                    : ''
+                }
+              </div>
 
-            <div style="display:flex; gap:0.5rem;">
-              <button onclick="editClubDescription(${club.id})" class="btn btn-secondary" style="flex:1;">✏️ Edit</button>
-              <button onclick="openAssignLeaderModal(${club.id})" class="btn btn-secondary" style="flex:1;">👤 Assign</button>
-              <button onclick="deleteClub(${club.id})" class="btn btn-danger" style="flex:1;">🗑️ Delete</button>
+              <div style="display:flex; gap:0.5rem;">
+                <button onclick="editClubDescription(${club.id})" class="btn btn-secondary" style="flex:1;">Edit</button>
+                <button onclick="openAssignLeaderModal(${club.id})" class="btn btn-secondary" style="flex:1;">Assign</button>
+                <button onclick="deleteClub(${club.id})" class="btn btn-danger" style="flex:1;">Delete</button>
+              </div>
             </div>
-          </div>
-        `
-        : ''
+          `
+          : ''
+      }
+    `;
+
+    grid.appendChild(card);
+  });
+}
+
+function openClubModal(club) {
+  const modal = document.getElementById('modal');
+  const title = document.getElementById('modalTitle');
+  const body = document.getElementById('modalBody');
+  
+  title.textContent = club.name;
+  body.innerHTML = `
+    <img src="${club.image}" alt="${club.name}" style="width:100%; border-radius:8px; margin-bottom:1rem;">
+    <p style="margin-bottom:1rem;">${club.description}</p>
+    <p style="color:#9ca3af;">👥 ${club.members?.length || 0} members</p>
+    <div style="margin-top:1.5rem; display:flex; gap:1rem;">
+      ${
+        currentUser?.clubs?.includes(club.id)
+          ? `<button class="btn btn-danger" onclick="leaveClub(${club.id})">Leave Club</button>`
+          : `<button class="btn btn-primary" onclick="joinClub(${club.id})">Join Club</button>`
       }
     </div>
   `;
-  grid.appendChild(card);
-});
+  
+  modal.classList.add('active');
 }
+
 
 async function removeClubLeader(clubId) {
   if (!confirm("Remove this club's leader?")) return;
@@ -1469,26 +1514,32 @@ document.getElementById('editProfileForm').addEventListener('submit', async func
                 // Disable editing if Admin
     if (currentUser.role === 'Admin') {
         document.getElementById('editProfileBtn').disabled = true;
-        document.getElementById('editProfileBtn').textContent = '🔒 Admin profile locked';
+        document.getElementById('editProfileBtn').textContent = 'Admin profile locked';
         document.getElementById('editProfileBtn').classList.add('btn-secondary');
     }
 
             const clubsDiv = document.getElementById('profileClubs');
             clubsDiv.innerHTML = '';
             
-            if (currentUser.clubs && currentUser.clubs.length > 0) {
-                currentUser.clubs.forEach(clubId => {
-                    const club = database.clubs.find(c => c.id === clubId);
-                    if (club) {
-                        const div = document.createElement('div');
-                        div.className = 'club-item';
-                        div.innerHTML = `
-                            <strong>${club.name}</strong>
-                            <p style="font-size: 0.875rem; color: #9ca3af; margin-top: 0.25rem;">👥 ${club.members ? club.members.length : 0} members</p>
-                        `;
-                        clubsDiv.appendChild(div);
-                    }
-                });
+           if (currentUser.clubs && currentUser.clubs.length > 0) {
+  currentUser.clubs.forEach(clubId => {
+    const club = database.clubs.find(c => c.id === clubId);
+    if (club) {
+      const div = document.createElement('div');
+      div.className = 'club-item';
+      div.style.cursor = 'pointer';
+      div.onclick = () => openMemberClubModal(club);
+      div.innerHTML = `
+        <strong>${club.name}</strong>
+        <p style="font-size: 0.875rem; color: #9ca3af; margin-top: 0.25rem;">
+          👥 ${club.members ? club.members.length : 0} members
+        </p>
+      `;
+      clubsDiv.appendChild(div);
+    }
+  });
+
+
             } else {
                 clubsDiv.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🎭</div><p>You haven\'t joined any clubs yet</p></div>';
             }
@@ -1504,7 +1555,7 @@ async function openModal(type) {
 
   // 🟦 Announcement
   if (type === 'announcement') {
-    title.innerHTML = '<span style="display:flex;align-items:center;gap:0.5rem;">📢 <strong>Post Announcement</strong></span>';
+    title.innerHTML = '<span style="display:flex;align-items:center;gap:0.5rem;"><strong>Post Announcement</strong></span>';
     body.innerHTML = `
       <form onsubmit="postAnnouncement(event)" style="display:flex;flex-direction:column;gap:1rem;">
         <div>
@@ -1552,6 +1603,84 @@ async function openModal(type) {
   modal.classList.add('active');
 }
 
+async function openMemberClubModal(club) {
+  const modal = document.getElementById('modal');
+  const title = document.getElementById('modalTitle');
+  const body = document.getElementById('modalBody');
+
+  modal.classList.add('active');
+  title.textContent = club.name;
+  body.innerHTML = '<div class="loading">Loading club info...</div>';
+
+  try {
+    const res = await apiCall(`/clubs/${club.id}`);
+    const c = res.club;
+
+    // 🟦 Announcements
+    let announcementsHTML = c.announcements?.length
+      ? c.announcements.map(a => `
+        <div class="announcement-item">
+          <p>${a.text}</p>
+          <p style="font-size:0.75rem; color:#9ca3af;">📅 ${a.date}</p>
+        </div>`).join('')
+      : `<p style="color:#9ca3af;">No announcements yet.</p>`;
+
+    // 🟨 Events
+    let eventsHTML = c.events?.length
+      ? c.events.map(e => `
+        <div class="event-item">
+          <p><strong>${e.title}</strong></p>
+          <p style="font-size:0.875rem; color:#9ca3af;">📅 ${e.date}</p>
+          <p>${e.description || ''}</p>
+        </div>`).join('')
+      : `<p style="color:#9ca3af;">No events yet.</p>`;
+
+    // 💳 Membership
+    const membership = c.membership || {};
+    const membershipHTML = `
+      <div>
+        <p><strong>Account Name:</strong> ${membership.accountName || '—'}</p>
+        <p><strong>Account Number:</strong> ${membership.accountNumber || '—'}</p>
+        <p><strong>Description:</strong> ${membership.description || '—'}</p>
+        ${membership.image ? `<img src="${membership.image}" alt="QR Code" style="width:150px; border-radius:8px; margin-top:1rem;">` : ''}
+        </div>
+    `;
+
+    // ✅ Render final modal
+    body.innerHTML = `
+      <div>
+        <img src="${c.image}" alt="${c.name}" style="width:100%; border-radius:8px; margin-bottom:1rem;">
+        <p>${c.description}</p>
+
+        <hr style="margin:1.5rem 0; opacity:0.2;">
+        <h4 style="margin-bottom:0.5rem;">📢 Announcements</h4>
+        ${announcementsHTML}
+
+        <hr style="margin:1.5rem 0; opacity:0.2;">
+        <h4 style="margin-bottom:0.5rem;">📅 Events</h4>
+        ${eventsHTML}
+
+        <hr style="margin:1.5rem 0; opacity:0.2;">
+        <h4 style="margin-bottom:0.5rem;">💳 Membership Info</h4>
+        ${membershipHTML}
+
+        <div style="display:flex; justify-content:center; margin-top:1.5rem;">
+  ${
+    currentUser?.clubs?.includes(c.id)
+      ? `<button class="btn btn-danger" onclick="leaveClub(${c.id})">Leave Club</button>`
+      : `<button class="btn btn-primary" onclick="joinClub(${c.id})">Join Club</button>`
+  }
+        </div>
+
+      </div>
+    `;
+  } catch (err) {
+    console.error('Error loading club:', err);
+    body.innerHTML = '<div class="error">Failed to load club info.</div>';
+  }
+}
+
+
 // ② Dedicated helper for loading clubs + members asynchronously
 async function openAssignLeaderModal(preselectedClubId = null) {
   const modal = document.getElementById('modal');
@@ -1569,7 +1698,7 @@ async function openAssignLeaderModal(preselectedClubId = null) {
       <label><strong>Select Leader (Member):</strong></label>
       <select id="leaderMemberSelect" class="input"></select>
     </div>
-    <button onclick="assignLeaderToClub()" class="btn btn-primary" style="width:100%;">💾 Assign Leader</button>
+    <button onclick="assignLeaderToClub()" class="btn btn-primary" style="width:100%;">Assign Leader</button>
   `;
 
   // fetch lists
@@ -1689,12 +1818,18 @@ async function openAssignLeaderModal(preselectedClubId = null) {
 
 
         async function joinClub(clubId) {
+  if (!currentUser || !currentUser.id) {
+    alert('Please log in first.');
+    return;
+  }
+
   try {
     await apiCall(`/clubs/${clubId}/join`, {
       method: 'POST',
       body: JSON.stringify({ memberId: currentUser.id }) // ✅ FIXED
     });
 
+    // ✅ Update local user and club data
     if (!currentUser.clubs) currentUser.clubs = [];
     if (!currentUser.clubs.includes(clubId)) currentUser.clubs.push(clubId);
 
@@ -1707,13 +1842,19 @@ async function openAssignLeaderModal(preselectedClubId = null) {
       if (!club.members.includes(currentUser.id)) club.members.push(currentUser.id);
     }
 
-    closeModal();
-    showMessage(`Successfully joined ${club ? club.name : 'the club'}!`, 'success');
-    showPage('dashboard');
+    showMessage(`✅ Joined ${club ? club.name : 'club'} successfully!`, 'success');
+
+    // 🟢 Live update modal if it's open
+    const modal = document.getElementById('modal');
+    if (modal.classList.contains('active')) {
+      openMemberClubModal(club); // re-render modal instantly
+    }
+
   } catch (error) {
     alert(error.message || 'Failed to join club');
   }
 }
+
 
         async function deleteClub(clubId) {
     if (!confirm("Are you sure you want to delete this club?")) return;
@@ -1736,23 +1877,37 @@ async function leaveClub(clubId) {
     return;
   }
 
+  if (!confirm('Are you sure you want to leave this club?')) return;
+
   try {
     await apiCall(`/clubs/${clubId}/leave`, {
       method: 'POST',
-      body: JSON.stringify({ memberId: currentUser.id }) // ✅ use memberId
+      body: JSON.stringify({ memberId: currentUser.id })
     });
 
+    // ✅ Update local data
     currentUser.clubs = currentUser.clubs.filter(id => id !== clubId);
     localStorage.setItem('user', JSON.stringify(currentUser));
 
-    alert('You have left the club.');
-    showPage('dashboard');
-    loadInitialData();
+    const club = database.clubs.find(c => c.id === clubId);
+    if (club && club.members) {
+      club.members = club.members.filter(id => id !== currentUser.id);
+    }
+
+    showMessage('🚪 You left the club.', 'success');
+
+    // 🟢 Live update modal if it's open
+    const modal = document.getElementById('modal');
+    if (modal.classList.contains('active')) {
+      openMemberClubModal(club); // re-render modal instantly
+    }
+
   } catch (err) {
     console.error('Error leaving club:', err);
     alert('Failed to leave club.');
   }
 }
+
 
 
 
