@@ -42,54 +42,7 @@ export default {
       
           // ============================================
           // ============================================
-// ✅ GET /clubs/:id - Get a specific club with details
-// ============================================
-if (path.match(/^\/clubs\/\d+$/) && method === 'GET') {
-  const clubId = parseInt(path.split('/')[2]);
 
-  // Get club info
-  const club = await env.DB.prepare('SELECT * FROM clubs WHERE id = ?').bind(clubId).first();
-  if (!club) return jsonResponse({ error: 'Club not found' }, 404);
-
-  // Get members of this club
-  const members = await env.DB.prepare(`
-    SELECT cm.id, cm.name, cm.role
-    FROM club_members cm
-    JOIN club_member_links cml ON cm.id = cml.member_id
-    WHERE cml.club_id = ?
-  `).bind(clubId).all();
-
-  // Get club announcements
-  const announcements = await env.DB.prepare(`
-    SELECT id, text, datetime(created_at) as date
-    FROM club_announcements
-    WHERE club_id = ?
-    ORDER BY created_at DESC
-  `).bind(clubId).all();
-
-  // Get club events
-  const events = await env.DB.prepare(`
-    SELECT id, title, description, event_date as date
-    FROM events
-    WHERE club_id = ?
-    ORDER BY event_date ASC
-  `).bind(clubId).all();
-
-  // Respond with full club details
-  return jsonResponse({
-    club: {
-      id: club.id,
-      name: club.name,
-      description: club.description,
-      image: club.image,
-      adminId: club.admin_id,
-      leaderId: club.leader_id,
-      members: members.results,
-      announcements: announcements.results,
-      events: events.results
-    }
-  });
-}
 
 // AUTHENTICATION ENDPOINTS (Admins + Members)
 // ============================================
@@ -187,49 +140,7 @@ if (path === '/members' && method === 'GET') {
       // CLUBS ENDPOINTS
       // ============================================
       
-      
 
-
-      // GET /clubs/:id - Get specific club
-      if (path.match(/^\/clubs\/\d+$/) && method === 'GET') {
-  const clubId = parseInt(path.split('/')[2]);
-
-  const club = await env.DB.prepare('SELECT * FROM clubs WHERE id = ?').bind(clubId).first();
-  if (!club) return jsonResponse({ error: 'Club not found' }, 404);
-
-
-  // Members
-  const members = await env.DB.prepare(
-    `SELECT cm.*
-     FROM club_members cm
-     JOIN club_member_links cml ON cm.id = cml.member_id
-     WHERE cml.club_id = ?`
-  ).bind(clubId).all();
-
-  // Announcements
-  const announcements = await env.DB.prepare(
-    'SELECT id, text, datetime(created_at) as date FROM club_announcements WHERE club_id = ? ORDER BY created_at DESC'
-  ).bind(clubId).all();
-
-  // Events
-  const events = await env.DB.prepare(
-    'SELECT id, title, description, event_date as date FROM events WHERE club_id = ? ORDER BY event_date ASC'
-  ).bind(clubId).all();
-
-  return jsonResponse({
-    club: {
-      id: club.id,
-      name: club.name,
-      description: club.description,
-      image: club.image,
-      adminId: club.admin_id,
-      leaderId: club.leader_id,
-      members: members.results.map(m => m.student_id),
-      announcements: announcements.results,
-      events: events.results
-    }
-  });
-}
 
 // ✅ Get membership info for a specific club
 if (path.match(/^\/clubs\/\d+\/membership$/) && method === 'GET') {
@@ -775,15 +686,16 @@ if (/^\/members\/\d+$/.test(path) && method === 'GET') {
 }
 if (path.match(/^\/clubs\/\d+$/) && method === 'GET') {
   const clubId = parseInt(path.split('/')[2]);
+
   const club = await env.DB.prepare('SELECT * FROM clubs WHERE id = ?').bind(clubId).first();
   if (!club) return jsonResponse({ error: 'Club not found' }, 404);
 
-  const members = await env.DB.prepare(
-    `SELECT cm.id, cm.name, cm.role
-     FROM club_members cm
-     JOIN club_member_links cml ON cm.id = cml.member_id
-     WHERE cml.club_id = ?`
-  ).bind(clubId).all();
+  const members = await env.DB.prepare(`
+    SELECT cm.id, cm.name, cm.role
+    FROM club_members cm
+    JOIN club_member_links cml ON cm.id = cml.member_id
+    WHERE cml.club_id = ?
+  `).bind(clubId).all();
 
   const announcements = await env.DB.prepare(
     'SELECT id, text, datetime(created_at) as date FROM club_announcements WHERE club_id = ? ORDER BY created_at DESC'
@@ -799,6 +711,7 @@ if (path.match(/^\/clubs\/\d+$/) && method === 'GET') {
       name: club.name,
       description: club.description,
       image: club.image,
+      adminId: club.admin_id,
       leaderId: club.leader_id,
       members: members.results,
       announcements: announcements.results,

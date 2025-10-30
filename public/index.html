@@ -885,7 +885,7 @@ body.dark a:hover {
 </div>
 
 <!-- Profile Page (moved outside member dashboard) -->
-<div id="profilePage" class="hidden">
+  <div id="profilePage" class="hidden">
   <h2 class="title">My Profile</h2>
 
   <div class="card" style="max-width: 42rem; margin: 0 auto; padding: 2rem;">
@@ -897,7 +897,10 @@ body.dark a:hover {
         <p id="profileEmail" style="color: #9ca3af; margin-bottom: 0.5rem;">email@example.com</p>
         <span id="profileRole" class="badge">Member</span>
       </div>
-    </div>
+  </div>
+
+  <!-- Ensure profile clubs container exists -->
+  <div id="profileClubs" style="display:none"></div>
 
     <!-- Basic Info -->
     <div id="basicInfo">
@@ -1034,6 +1037,8 @@ body.dark a:hover {
                 database.generalEvents = eventsData.events || [];
                 
                 console.log('Loaded data:', database);
+        // ensure announcements are available for dashboards
+        await loadAnnouncements();
             } catch (error) {
                 console.error('Failed to load data:', error);
                 showMessage('Failed to load data. Please refresh.', 'error');
@@ -1073,6 +1078,8 @@ body.dark a:hover {
                 });
                 
                 currentUser = data.user;
+                // persist session locally so page reloads keep the user
+                try { localStorage.setItem('user', JSON.stringify(currentUser)); } catch {}
                 console.log('Logged in user:', currentUser);
                 
                 await loadInitialData();
@@ -1113,11 +1120,24 @@ body.dark a:hover {
     } else if (page === 'clubs') {
         document.getElementById('clubsPage').classList.remove('hidden');
         renderClubs();
-    } else if (page === 'profile') {
-        document.getElementById('profilePage').classList.remove('hidden');
-        renderProfile();
     }
-}
+    else if (page === 'profile') {
+    document.getElementById('profilePage').classList.remove('hidden');
+    renderProfile();
+
+    // Attach button listener dynamically
+    const editBtn = document.getElementById('editProfileBtn');
+    const editForm = document.getElementById('editProfileForm');
+    const basicInfo = document.getElementById('basicInfo');
+
+    if (editBtn && editForm && basicInfo) {
+        editBtn.onclick = () => {
+            const isHidden = editForm.classList.contains('hidden');
+            editForm.classList.toggle('hidden', !isHidden);
+            basicInfo.classList.toggle('hidden', isHidden);
+            editBtn.textContent = isHidden ? 'Cancel Edit' : 'Edit Profile';
+        };
+          }}}
 
         async function renderAdminDashboard() {
             try {
@@ -1359,63 +1379,72 @@ function renderClubs() {
     card.className = 'card club-card';
     card.onclick = () => openClubModal(club);
 
+    const isMember = currentUser?.type === 'Member';
+    const isLeader = currentUser?.type === 'Leader' && currentUser?.leaderOf === club.id;
+    const isAdmin = currentUser?.type === 'Admin';
+    const joined = currentUser?.clubs?.includes(club.id);
+
+    let buttonHTML = '';
+    if (isMember) {
+      buttonHTML = `
+        <div style="display:flex; justify-content:center; margin-bottom:1rem;">
+          <button id="joinBtn-${club.id}" 
+                  class="btn ${joined ? 'btn-danger' : 'btn-primary'}"
+                  data-club-id="${club.id}">
+            ${joined ? 'Leave Club' : 'Join Club'}
+          </button>
+        </div>
+      `;
+    } else if (isLeader) {
+      buttonHTML = `
+        <div style="text-align:center; margin-bottom:1rem;">
+          <span class="badge" style="background:#2563eb;color:white;padding:0.3rem 0.6rem;border-radius:8px;">
+             You lead this club
+          </span>
+        </div>
+      `;
+    }
+
     card.innerHTML = `
-      <img src="${club.image}" alt="${club.name}" 
+      <img src="${club.image || 'https://via.placeholder.com/300x150?text=No+Image'}"
+           alt="${club.name}"
            style="width:100%; height:180px; object-fit:cover; border-radius:0.75rem 0.75rem 0 0; margin-bottom:1rem;">
-      
       <h3 style="font-size:1.25rem; font-weight:bold; text-align:center; margin-bottom:0.5rem;">
         ${club.name}
       </h3>
       <p style="color:#9ca3af; text-align:center; margin-bottom:1rem;">
-        ${club.description.substring(0, 100)}...
+        ${club.description?.substring(0, 100) || 'No description available'}...
       </p>
-
-      <div style="display:flex; justify-content:center; margin-bottom:1rem;">
-        ${
-          currentUser?.clubs?.includes(club.id)
-            ? `<button class="btn btn-danger" onclick="leaveClub(${club.id})">Leave Club</button>`
-            : `<button class="btn btn-primary" onclick="joinClub(${club.id})">Join Club</button>`
-        }
-      </div>
-
+      ${buttonHTML}
       <div style="text-align:center; font-size:0.875rem; color:#9ca3af;">
         👥 ${club.members?.length || 0} members • 📅 ${club.events?.length || 0} events
       </div>
-
-      ${
-        currentUser && currentUser.role === 'Admin'
-          ? `
-            <div style="margin-top:1rem; border-top:1px solid rgba(255,255,255,0.1); padding-top:1rem;">
-              <div style="margin-bottom:0.75rem;">
-                <strong>👤 Leader:</strong>
-                <span style="color:#9ca3af;">
-                  ${club.leader?.name || '<em>No leader assigned</em>'}
-                </span>
-                ${
-                  club.leader
-                    ? `<button onclick="removeClubLeader(${club.id})"
-                        class="btn btn-danger"
-                        style="padding:0.25rem 0.75rem; font-size:0.8rem; margin-left:0.5rem;">
-                        ❌ Remove
-                      </button>`
-                    : ''
-                }
-              </div>
-
-              <div style="display:flex; gap:0.5rem;">
-                <button onclick="editClubDescription(${club.id})" class="btn btn-secondary" style="flex:1;">Edit</button>
-                <button onclick="openAssignLeaderModal(${club.id})" class="btn btn-secondary" style="flex:1;">Assign</button>
-                <button onclick="deleteClub(${club.id})" class="btn btn-danger" style="flex:1;">Delete</button>
-              </div>
-            </div>
-          `
-          : ''
-      }
     `;
 
     grid.appendChild(card);
   });
+
+  // ✅ Attach button click listeners after rendering
+  if (currentUser?.type === 'Member') {
+    document.querySelectorAll('[id^="joinBtn-"]').forEach(btn => {
+      const clubId = parseInt(btn.dataset.clubId);
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+
+        const joined = currentUser.clubs.includes(clubId);
+        if (joined) {
+          await leaveClub(clubId);
+        } else {
+          await joinClub(clubId);
+        }
+
+        updateClubButtonState(clubId); // instant UI update
+      });
+    });
+  }
 }
+
+
 
 function openClubModal(club) {
   const modal = document.getElementById('modal');
@@ -1428,15 +1457,35 @@ function openClubModal(club) {
     <p style="margin-bottom:1rem;">${club.description}</p>
     <p style="color:#9ca3af;">👥 ${club.members?.length || 0} members</p>
     <div style="margin-top:1.5rem; display:flex; gap:1rem;">
-      ${
-        currentUser?.clubs?.includes(club.id)
-          ? `<button class="btn btn-danger" onclick="leaveClub(${club.id})">Leave Club</button>`
-          : `<button class="btn btn-primary" onclick="joinClub(${club.id})">Join Club</button>`
-      }
-    </div>
+  ${
+    currentUser?.type === 'Member'
+      ? `
+        <button id="modalJoinBtn-${club.id}" 
+                class="btn ${currentUser.clubs.includes(club.id) ? 'btn-danger' : 'btn-primary'}"
+                data-club-id="${club.id}">
+          ${currentUser.clubs.includes(club.id) ? 'Leave Club' : 'Join Club'}
+        </button>
+      `
+      : ''
+  }
+</div>
+
   `;
   
   modal.classList.add('active');
+}
+// ✅ Make the modal button functional
+if (currentUser?.type === 'Member') {
+  const modalBtn = document.getElementById(`modalJoinBtn-${club.id}`);
+  if (modalBtn) {
+    modalBtn.addEventListener('click', async () => {
+      const joined = currentUser.clubs.includes(club.id);
+      if (joined) await leaveClub(club.id);
+      else await joinClub(club.id);
+      updateClubButtonState(club.id);
+      openClubModal(club); // re-render modal instantly
+    });
+  }
 }
 
 
@@ -1613,11 +1662,16 @@ async function openMemberClubModal(club) {
   body.innerHTML = '<div class="loading">Loading club info...</div>';
 
   try {
-    const res = await apiCall(`/clubs/${club.id}`);
-    const c = res.club;
+    // ✅ Use already-loaded club data
+    const c = database.clubs.find(c => c.id === club.id);
+    if (!c) throw new Error('Club not found in cache.');
+
+    // ✅ Fetch membership info (optional)
+    const membershipRes = await apiCall(`/clubs/${club.id}/membership`);
+    const membership = membershipRes || {};
 
     // 🟦 Announcements
-    let announcementsHTML = c.announcements?.length
+    const announcementsHTML = c.announcements?.length
       ? c.announcements.map(a => `
         <div class="announcement-item">
           <p>${a.text}</p>
@@ -1626,7 +1680,7 @@ async function openMemberClubModal(club) {
       : `<p style="color:#9ca3af;">No announcements yet.</p>`;
 
     // 🟨 Events
-    let eventsHTML = c.events?.length
+    const eventsHTML = c.events?.length
       ? c.events.map(e => `
         <div class="event-item">
           <p><strong>${e.title}</strong></p>
@@ -1636,50 +1690,51 @@ async function openMemberClubModal(club) {
       : `<p style="color:#9ca3af;">No events yet.</p>`;
 
     // 💳 Membership
-    const membership = c.membership || {};
     const membershipHTML = `
       <div>
-        <p><strong>Account Name:</strong> ${membership.accountName || '—'}</p>
-        <p><strong>Account Number:</strong> ${membership.accountNumber || '—'}</p>
-        <p><strong>Description:</strong> ${membership.description || '—'}</p>
-        ${membership.image ? `<img src="${membership.image}" alt="QR Code" style="width:150px; border-radius:8px; margin-top:1rem;">` : ''}
-        </div>
+        <p><strong>Account Name:</strong> ${membership.membership_name || '—'}</p>
+        <p><strong>Account Number:</strong> ${membership.membership_number || '—'}</p>
+        <p><strong>Description:</strong> ${membership.membership_description || '—'}</p>
+        ${membership.membership_image
+          ? `<img src="${membership.membership_image}" alt="QR Code" style="width:150px; border-radius:8px; margin-top:1rem;">`
+          : ''}
+      </div>
     `;
 
     // ✅ Render final modal
     body.innerHTML = `
       <div>
-        <img src="${c.image}" alt="${c.name}" style="width:100%; border-radius:8px; margin-bottom:1rem;">
-        <p>${c.description}</p>
+        <img src="${c.image || 'https://via.placeholder.com/400x200?text=No+Image'}" 
+             alt="${c.name}" 
+             style="width:100%; border-radius:8px; margin-bottom:1rem;">
+        <p>${c.description || 'No description available'}</p>
 
         <hr style="margin:1.5rem 0; opacity:0.2;">
-        <h4 style="margin-bottom:0.5rem;">📢 Announcements</h4>
+        <h4>Announcements</h4>
         ${announcementsHTML}
 
         <hr style="margin:1.5rem 0; opacity:0.2;">
-        <h4 style="margin-bottom:0.5rem;">📅 Events</h4>
+        <h4>Events</h4>
         ${eventsHTML}
 
         <hr style="margin:1.5rem 0; opacity:0.2;">
-        <h4 style="margin-bottom:0.5rem;">💳 Membership Info</h4>
+        <h4>Membership Info</h4>
         ${membershipHTML}
 
         <div style="display:flex; justify-content:center; margin-top:1.5rem;">
-  ${
-    currentUser?.clubs?.includes(c.id)
-      ? `<button class="btn btn-danger" onclick="leaveClub(${c.id})">Leave Club</button>`
-      : `<button class="btn btn-primary" onclick="joinClub(${c.id})">Join Club</button>`
-  }
+          ${
+            currentUser?.clubs?.includes(c.id)
+              ? `<button class="btn btn-danger" onclick="leaveClub(${c.id})">Leave Club</button>`
+              : `<button class="btn btn-primary" onclick="joinClub(${c.id})">Join Club</button>`
+          }
         </div>
-
       </div>
     `;
   } catch (err) {
-    console.error('Error loading club:', err);
+    console.error('Error loading club modal:', err);
     body.innerHTML = '<div class="error">Failed to load club info.</div>';
   }
 }
-
 
 // ② Dedicated helper for loading clubs + members asynchronously
 async function openAssignLeaderModal(preselectedClubId = null) {
@@ -1817,43 +1872,71 @@ async function openAssignLeaderModal(preselectedClubId = null) {
 }
 
 
-        async function joinClub(clubId) {
-  if (!currentUser || !currentUser.id) {
-    alert('Please log in first.');
-    return;
-  }
-
+async function joinClub(clubId) {
   try {
     await apiCall(`/clubs/${clubId}/join`, {
       method: 'POST',
-      body: JSON.stringify({ memberId: currentUser.id }) // ✅ FIXED
+      body: JSON.stringify({ memberId: currentUser.id })
     });
 
-    // ✅ Update local user and club data
-    if (!currentUser.clubs) currentUser.clubs = [];
-    if (!currentUser.clubs.includes(clubId)) currentUser.clubs.push(clubId);
-
-    // Update localStorage so the joined club stays after refresh
-    localStorage.setItem('user', JSON.stringify(currentUser));
-
-    const club = database.clubs.find(c => c.id === clubId);
-    if (club) {
-      if (!club.members) club.members = [];
-      if (!club.members.includes(currentUser.id)) club.members.push(currentUser.id);
+    // 🟩 Instantly update local user data
+    if (!currentUser.clubs.includes(clubId)) {
+      currentUser.clubs.push(clubId);
     }
 
-    showMessage(`✅ Joined ${club ? club.name : 'club'} successfully!`, 'success');
+    // 🟩 Refresh club info safely
+    await refreshClubCard(clubId);
 
-    // 🟢 Live update modal if it's open
-    const modal = document.getElementById('modal');
-    if (modal.classList.contains('active')) {
-      openMemberClubModal(club); // re-render modal instantly
-    }
-
-  } catch (error) {
-    alert(error.message || 'Failed to join club');
+    showMessage('Joined club successfully!', 'success');
+  } catch (err) {
+    showMessage(err.message || 'Failed to join club', 'error');
   }
 }
+
+async function leaveClub(clubId) {
+  try {
+    await apiCall(`/clubs/${clubId}/leave`, {
+      method: 'POST',
+      body: JSON.stringify({ memberId: currentUser.id })
+    });
+
+    // 🟩 Instantly remove locally
+    currentUser.clubs = currentUser.clubs.filter(id => id !== clubId);
+
+    await refreshClubCard(clubId);
+
+    showMessage('Left club successfully!', 'success');
+  } catch (err) {
+    showMessage(err.message || 'Failed to leave club', 'error');
+  }
+}
+
+// 🔄 Helper: re-fetch that club safely
+async function refreshClubCard(clubId) {
+  try {
+    const clubData = await apiCall(`/clubs/${clubId}`);
+    const club = clubData.club;
+
+    if (club) {
+      updateClubButtonState(clubId); // re-render join/leave button
+    }
+  } catch {
+    console.warn('Club info refresh skipped');
+  }
+}
+
+// 🟩 Update button state (Join ↔ Leave)
+function updateClubButtonState(clubId) {
+  const btn = document.querySelector(`#joinBtn-${clubId}`);
+  if (!btn) return;
+
+  const joined = currentUser.clubs.includes(clubId);
+  btn.textContent = joined ? 'Leave Club' : 'Join Club';
+  btn.classList.toggle('btn-danger', joined);
+  btn.classList.toggle('btn-primary', !joined);
+  btn.setAttribute('onclick', joined ? `leaveClub(${clubId})` : `joinClub(${clubId})`);
+}
+
 
 
         async function deleteClub(clubId) {
@@ -1871,42 +1954,7 @@ async function openAssignLeaderModal(preselectedClubId = null) {
         alert(error.message || 'Failed to delete club');
     }
 }
-async function leaveClub(clubId) {
-  if (!currentUser || !currentUser.id) {
-    alert('Please log in first.');
-    return;
-  }
 
-  if (!confirm('Are you sure you want to leave this club?')) return;
-
-  try {
-    await apiCall(`/clubs/${clubId}/leave`, {
-      method: 'POST',
-      body: JSON.stringify({ memberId: currentUser.id })
-    });
-
-    // ✅ Update local data
-    currentUser.clubs = currentUser.clubs.filter(id => id !== clubId);
-    localStorage.setItem('user', JSON.stringify(currentUser));
-
-    const club = database.clubs.find(c => c.id === clubId);
-    if (club && club.members) {
-      club.members = club.members.filter(id => id !== currentUser.id);
-    }
-
-    showMessage('🚪 You left the club.', 'success');
-
-    // 🟢 Live update modal if it's open
-    const modal = document.getElementById('modal');
-    if (modal.classList.contains('active')) {
-      openMemberClubModal(club); // re-render modal instantly
-    }
-
-  } catch (err) {
-    console.error('Error leaving club:', err);
-    alert('Failed to leave club.');
-  }
-}
 
 
 
@@ -1948,18 +1996,28 @@ function editClubLeader(clubId) {
         alert(err.message || 'Failed to update leader');
     });
 }
- async function deleteAnnouncement(id) {
+async function loadAnnouncements() {
   try {
-    const res = await fetch(`${API_BASE_URL}/announcements/${id}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' }
-    });
+    const data = await apiCall('/announcements');
+    database.generalAnnouncements = data.announcements || [];
+    // If admin dashboard visible, re-render
+    if (!document.getElementById('adminDashboard').classList.contains('hidden')) {
+      renderAdminDashboard();
+    }
+  } catch (err) {
+    console.error('Failed to load announcements:', err);
+  }
+}
 
-    const data = await res.json();
-    alert(data.message);
-    loadAnnouncements(); // refresh UI after delete
+async function deleteAnnouncement(id) {
+  if (!confirm('Delete announcement?')) return;
+  try {
+    await apiCall(`/announcements/${id}`, { method: 'DELETE' });
+    await loadAnnouncements();
+    alert('Announcement deleted');
   } catch (err) {
     console.error('Error deleting announcement:', err);
+    alert('Failed to delete announcement');
   }
 }
 
@@ -1981,6 +2039,12 @@ async function signup(event) {
       method: 'POST',
       body: JSON.stringify({ name, studentID, email, password, role: 'Member' })
     });
+
+    // Some APIs return the created user; if so, save it so user can be auto-logged in
+    if (res.user) {
+      currentUser = res.user;
+      try { localStorage.setItem('user', JSON.stringify(currentUser)); } catch {}
+    }
 
     showSignupMessage('signupSuccess', 'Account created successfully! You can now login.');
     setTimeout(() => showLogin(), 1500);
@@ -2010,82 +2074,38 @@ function showLogin() {
   document.getElementById('loginPage').classList.remove('hidden');
 }
 // ==========================
-// PROFILE PAGE HANDLER
+// ✅ PROFILE PAGE HANDLER (FINAL FIXED VERSION)
 // ==========================
 
-// Load current user from localStorage
+// Load user from localStorage
 currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-// inside async function login(e)
-currentUser = data.user;
-localStorage.setItem('user', JSON.stringify(currentUser)); // ✅ Save user data
 
+// Element references (these exist once DOM is ready)
+let profileName, profileEmail, profileRole, profileID, profileJoined, profileCourse, profileYearSection, profileAbout;
+let editProfileBtn, editProfileForm;
 
-// Elements
-const profileName = document.getElementById('profileName');
-const profileEmail = document.getElementById('profileEmail');
-const profileRole = document.getElementById('profileRole');
-const profileID = document.getElementById('profileID');
-const profileJoined = document.getElementById('profileJoined');
-const editProfileBtn = document.getElementById('editProfileBtn');
-const editProfileForm = document.getElementById('editProfileForm');
+// ==========================
+// Initialize after DOM is loaded
+// ==========================
+document.addEventListener('DOMContentLoaded', () => {
+  // Grab profile elements safely
+  profileName = document.getElementById('profileName');
+  profileEmail = document.getElementById('profileEmail');
+  profileRole = document.getElementById('profileRole');
+  profileID = document.getElementById('profileID');
+  profileJoined = document.getElementById('profileJoined');
+  profileCourse = document.getElementById('profileCourse');
+  profileYearSection = document.getElementById('profileYearSection');
+  profileAbout = document.getElementById('profileAbout');
+  editProfileBtn = document.getElementById('editProfileBtn');
+  editProfileForm = document.getElementById('editProfileForm');
 
-// Load Profile Data
-async function loadProfile() {
-  if (!currentUser?.id) return console.warn('No logged-in user');
-
-  const res = await fetch(`/api/members/${currentUser.id}`);
-  const data = await res.json();
-
-  if (data.member) {
-    const m = data.member;
-    profileName.textContent = m.name;
-    profileEmail.textContent = m.email;
-    profileRole.textContent = m.role;
-    profileID.textContent = m.student_id;
-    profileJoined.textContent = new Date(m.joined_at).toLocaleDateString();
-
-    // Fill form fields
-    document.getElementById('editName').value = m.name || '';
-    document.getElementById('editUsername').value = m.username || '';
-    document.getElementById('editEmail').value = m.email || '';
-    document.getElementById('editAbout').value = m.about_me || '';
-    document.getElementById('editYearSection').value = m.year_section || '';
-    document.getElementById('editCourse').value = m.course || '';
+  // Only attach handlers if profile exists
+  if (editProfileBtn && editProfileForm) {
+    attachProfileHandlers();
   }
-}
 
-// Toggle Edit Mode
-editProfileBtn.addEventListener('click', () => {
-  editProfileForm.classList.toggle('hidden');
-});
-
-// Save Profile Changes
-editProfileForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-
-  const updated = {
-    name: document.getElementById('editName').value,
-    username: document.getElementById('editUsername').value,
-    email: document.getElementById('editEmail').value,
-    about_me: document.getElementById('editAbout').value,
-    year_section: document.getElementById('editYearSection').value,
-    course: document.getElementById('editCourse').value
-  };
-
-  const res = await fetch(`/api/members/${currentUser.id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(updated)
-  });
-
-  const data = await res.json();
-  alert(data.message || 'Updated successfully!');
-  await loadProfile();
-  editProfileForm.classList.add('hidden');
-});
-
-// Auto-login if saved user exists
-window.addEventListener('DOMContentLoaded', () => {
+  // Auto-login handler
   const savedUser = JSON.parse(localStorage.getItem('user') || 'null');
   if (savedUser && savedUser.id) {
     currentUser = savedUser;
@@ -2093,13 +2113,106 @@ window.addEventListener('DOMContentLoaded', () => {
       document.getElementById('loginPage').classList.add('hidden');
       document.getElementById('mainApp').classList.remove('hidden');
       showPage('dashboard');
+      loadProfile(); // load profile once logged in
     });
+  } else {
+    loadInitialData().catch(() => {});
   }
 });
 
-// Optional: view member profile quick view (you can hook it to modal)
+// ==========================
+// Load Profile Data
+// ==========================
+async function loadProfile() {
+  if (!currentUser?.id) return console.warn('⚠️ No logged-in user found');
+
+  try {
+    const res = await fetch(`/api/members/${currentUser.id}`);
+    const data = await res.json();
+    if (!res.ok || !data.member) throw new Error('Failed to load profile');
+
+    const m = data.member;
+
+    // Fill displayed info
+    profileName.textContent = m.name || '—';
+    profileEmail.textContent = m.email || '—';
+    profileRole.textContent = m.role || 'Member';
+    profileID.textContent = m.student_id || '—';
+    profileJoined.textContent = m.joined_at ? new Date(m.joined_at).toLocaleDateString() : '—';
+    profileCourse.textContent = m.course || '—';
+    profileYearSection.textContent = m.year_section || '—';
+    profileAbout.textContent = m.about_me || '—';
+
+    // Pre-fill edit form fields
+    document.getElementById('editName').value = m.name || '';
+    document.getElementById('editUsername').value = m.username || '';
+    document.getElementById('editEmail').value = m.email || '';
+    document.getElementById('editBirthday').value = m.birthday || '';
+    document.getElementById('editAbout').value = m.about_me || '';
+    document.getElementById('editYearSection').value = m.year_section || '';
+    document.getElementById('editCourse').value = m.course || '';
+  } catch (err) {
+    console.error('Error loading profile:', err);
+  }
+}
+
+// ==========================
+// Attach Profile Button + Form Handlers
+// ==========================
+function attachProfileHandlers() {
+  // Toggle Edit Mode
+  editProfileBtn.addEventListener('click', () => {
+    const form = editProfileForm;
+    const basicInfo = document.getElementById('basicInfo');
+    const isHidden = form.classList.contains('hidden');
+
+    form.classList.toggle('hidden', !isHidden);
+    basicInfo.classList.toggle('hidden', isHidden);
+    editProfileBtn.textContent = isHidden ? 'Cancel Edit' : 'Edit Profile';
+  });
+
+  // Save Profile Changes
+  editProfileForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const updated = {
+      name: document.getElementById('editName').value,
+      username: document.getElementById('editUsername').value,
+      email: document.getElementById('editEmail').value,
+      birthday: document.getElementById('editBirthday').value,
+      about_me: document.getElementById('editAbout').value,
+      year_section: document.getElementById('editYearSection').value,
+      course: document.getElementById('editCourse').value
+    };
+
+    try {
+      const res = await fetch(`/api/members/${currentUser.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Update failed');
+
+      alert('✅ Profile updated successfully!');
+      currentUser = { ...currentUser, ...updated };
+      localStorage.setItem('user', JSON.stringify(currentUser));
+
+      await loadProfile();
+      editProfileForm.classList.add('hidden');
+      document.getElementById('basicInfo').classList.remove('hidden');
+      editProfileBtn.textContent = 'Edit Profile';
+    } catch (err) {
+      console.error('Error updating profile:', err);
+      alert('❌ Failed to update profile.');
+    }
+  });
+}
+
+// ==========================
+// Optional: View Member Quick Modal
+// ==========================
 function viewMemberProfile(memberId) {
-  // If you have members endpoint, fetch details; otherwise show basic modal
   openMemberModal(memberId);
 }
 
@@ -2144,7 +2257,7 @@ async function removeMemberFromClub(memberId, clubId) {
   if (!confirm('Remove this member from the club?')) return;
 
   try {
-    // Call API to remove link
+    // Call API to remove link (server expects userId)
     await apiCall(`/clubs/${clubId}/leave`, {
       method: 'POST',
       body: JSON.stringify({ memberId })
@@ -2169,17 +2282,21 @@ async function removeMemberFromClub(memberId, clubId) {
   }
 }
 
-async function assignLeaderToClub() {
-  const clubId = document.getElementById('leaderClubSelect').value;
-  const leaderId = document.getElementById('leaderMemberSelect').value;
+// Internal implementation for assigning a leader. Accepts optional clubId param.
+async function assignLeaderToClubInternal(clubId = null) {
+  const clubSelect = document.getElementById('leaderClubSelect');
+  const memberSelect = document.getElementById('leaderMemberSelect');
 
-  if (!clubId || !leaderId) {
+  const cid = clubId || (clubSelect ? clubSelect.value : null);
+  const leaderId = memberSelect ? memberSelect.value : null;
+
+  if (!cid || !leaderId) {
     alert('Please select both club and leader.');
     return;
   }
 
   try {
-    await apiCall(`/clubs/${clubId}`, {
+    await apiCall(`/clubs/${cid}`, {
       method: 'PUT',
       body: JSON.stringify({ leaderId })
     });
@@ -2189,6 +2306,11 @@ async function assignLeaderToClub() {
   } catch (error) {
     alert('❌ Failed to assign leader: ' + error.message);
   }
+}
+
+// Backwards-compatible wrapper used by inline onclicks
+function assignLeaderToClub(clubId = null) {
+  return assignLeaderToClubInternal(clubId);
 }
 async function loadLeaderMembers() {
   try {
@@ -2598,39 +2720,17 @@ async function deleteClubEvent(eventId) {
 async function removeMember(clubId, memberId) {
   if (!confirm('Remove this member?')) return;
   try {
-    await apiCall(`/clubs/${clubId}/members/${memberId}`, { method: 'DELETE' });
+    await apiCall(`/clubs/${clubId}/leave`, {
+      method: 'POST',
+      body: JSON.stringify({ userId: memberId })
+    });
     renderLeaderDashboard();
   } catch (err) {
     alert('Failed to remove member: ' + err.message);
   }
 }
-    </script>
-    <!-- Universal Modal -->
-<div id="modal" class="modal hidden" style="
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 9999;
-">
-  <div class="modal-content" style="
-    background: #1f2937;
-    color: white;
-    padding: 2rem;
-    border-radius: 1rem;
-    width: 90%;
-    max-width: 450px;
-    position: relative;
-  ">
-    <h2 id="modalTitle" style="margin-bottom: 1rem; font-size: 1.5rem;"></h2>
-    <div id="modalBody"></div>
-    <button onclick="closeModal()" class="btn btn-secondary" style="margin-top:1.5rem; width:100%;">
-      Close
-    </button>
-  </div>
-</div>
 
+
+    </script>
 </body>
 </html>
